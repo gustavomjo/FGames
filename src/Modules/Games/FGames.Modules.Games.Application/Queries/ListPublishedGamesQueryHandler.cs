@@ -1,4 +1,5 @@
 using FGames.Modules.Games.Application.DTOs;
+using FGames.Modules.Games.Application.Interfaces;
 using FGames.Modules.Games.Domain.Interfaces;
 using FGames.SharedKernel;
 using MediatR;
@@ -8,15 +9,25 @@ namespace FGames.Modules.Games.Application.Queries;
 public sealed class ListPublishedGamesQueryHandler : IRequestHandler<ListPublishedGamesQuery, Result<IReadOnlyList<GameDto>>>
 {
     private readonly IGameRepository _gameRepository;
+    private readonly IActivePromotionLookupService _activePromotionLookupService;
 
-    public ListPublishedGamesQueryHandler(IGameRepository gameRepository)
+    public ListPublishedGamesQueryHandler(IGameRepository gameRepository, IActivePromotionLookupService activePromotionLookupService)
     {
         _gameRepository = gameRepository;
+        _activePromotionLookupService = activePromotionLookupService;
     }
 
     public async Task<Result<IReadOnlyList<GameDto>>> Handle(ListPublishedGamesQuery request, CancellationToken cancellationToken)
     {
         var games = await _gameRepository.ListPublishedAsync(cancellationToken);
-        return Result.Success<IReadOnlyList<GameDto>>(games.Select(GameDto.FromEntity).ToList());
+
+        var dtos = new List<GameDto>(games.Count);
+        foreach (var game in games)
+        {
+            var promotion = await _activePromotionLookupService.GetActivePromotionForGameAsync(game.Id, cancellationToken);
+            dtos.Add(GameDto.FromEntity(game, promotion?.DiscountPercentage));
+        }
+
+        return Result.Success<IReadOnlyList<GameDto>>(dtos);
     }
 }

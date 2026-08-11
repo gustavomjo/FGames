@@ -102,6 +102,7 @@ Cada módulo tem seu próprio `DbContext` (`UsersDbContext`, `GamesDbContext`, `
 ## Jogos
 * Catálogo de jogos publicados é público (não exige autenticação)
 * Administrator cria, edita e publica jogos
+* Listagem de jogos já retorna o preço promocional vigente (`finalPrice`), quando o jogo estiver vinculado a uma promoção ativa
 
 ## Promoções
 * Administrator cria promoções (período + percentual de desconto) e vincula a jogos publicados
@@ -192,6 +193,8 @@ Para testar rotas de Administrator, crie o primeiro administrador diretamente no
 | POST   | `/`                    | Administrator  |
 | PUT    | `/{id}`                | Administrator  |
 | POST   | `/{id}/publish`        | Administrator  |
+
+> `GET /` (listagem) retorna, para cada jogo, `price` (preço base), `finalPrice` (preço já com desconto da promoção ativa, se houver) e `discountPercentage` (`null` quando não há promoção ativa).
 
 ## Promotions — `api/promotions`
 

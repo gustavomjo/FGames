@@ -51,7 +51,8 @@ builder.Services.AddLibraryInfrastructure(connectionString);
 // Adapters cross-módulo (só o Host enxerga mais de um módulo ao mesmo tempo)
 builder.Services.AddScoped<FGames.Modules.Promotions.Application.Interfaces.IGameLookupService, PromotionsGameLookupServiceAdapter>();
 builder.Services.AddScoped<FGames.Modules.Library.Application.Interfaces.IGameLookupService, LibraryGameLookupServiceAdapter>();
-builder.Services.AddScoped<IActivePromotionLookupService, LibraryActivePromotionLookupServiceAdapter>();
+builder.Services.AddScoped<FGames.Modules.Library.Application.Interfaces.IActivePromotionLookupService, LibraryActivePromotionLookupServiceAdapter>();
+builder.Services.AddScoped<FGames.Modules.Games.Application.Interfaces.IActivePromotionLookupService, GamesActivePromotionLookupServiceAdapter>();
 
 // Autenticação JWT
 var jwtSection = builder.Configuration.GetSection(JwtSettings.SectionName);
