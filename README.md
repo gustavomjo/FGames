@@ -2,9 +2,7 @@
 
 ## Tech Challenge - Fase 1
 
-API REST desenvolvida em **.NET 8** para gerenciamento de usuários e biblioteca de jogos digitais da plataforma **FIAP Cloud Games (FCG)**.
-
-O objetivo deste projeto é disponibilizar uma base sólida para as próximas fases da plataforma, permitindo o cadastro de usuários, autenticação segura, gerenciamento de jogos e controle da biblioteca de jogos adquiridos.
+API REST em **.NET 8** para cadastro de usuários e biblioteca de jogos digitais da plataforma **FIAP Cloud Games (FCG)**, construída como um **monólito modular** seguindo princípios de **Domain-Driven Design (DDD)**.
 
 ---
 
@@ -13,412 +11,217 @@ O objetivo deste projeto é disponibilizar uma base sólida para as próximas fa
 * Sobre o Projeto
 * Tecnologias Utilizadas
 * Arquitetura
-* Funcionalidades
 * Estrutura do Projeto
+* Funcionalidades
 * Requisitos
 * Como Executar
-* Banco de Dados
 * Autenticação
 * Endpoints
-* Testes
+* Testes (TDD)
 * Domain-Driven Design (DDD)
-* Melhorias Futuras
+* Melhorias Futuras (próximas fases)
 
 ---
 
 # 📖 Sobre o Projeto
 
-A **FIAP Cloud Games (FCG)** é uma plataforma de distribuição de jogos digitais voltados para educação em tecnologia.
+Nesta primeira fase foi desenvolvido o MVP responsável por:
 
-Nesta primeira fase foi desenvolvido um MVP responsável por:
-
-* Cadastro de usuários
-* Autenticação via JWT
-* Controle de permissões (Administrador e Usuário)
-* Cadastro de jogos
-* Biblioteca de jogos adquiridos
-
-Todo o projeto foi desenvolvido utilizando boas práticas de arquitetura, separação de responsabilidades e princípios de Domain-Driven Design (DDD).
+* Cadastro de usuários (nome, e-mail, senha) com validação de formato de e-mail e senha forte
+* Autenticação via JWT com dois níveis de acesso: `User` e `Administrator`
+* Cadastro e publicação de jogos (Administrator)
+* Criação de promoções e vínculo com jogos (Administrator)
+* Biblioteca de jogos adquiridos por usuário, com preço já considerando promoção vigente na compra
 
 ---
 
 # 🚀 Tecnologias Utilizadas
 
-* .NET 8
-* ASP.NET Core Web API
-* Entity Framework Core
-* SQL Server *(ou PostgreSQL, conforme configuração do projeto)*
-* JWT Authentication
-* Swagger / OpenAPI
-* FluentValidation
-* Serilog
+* .NET 8 / ASP.NET Core (Controllers)
+* Entity Framework Core 8 + Npgsql (PostgreSQL)
+* MediatR (CQRS) + FluentValidation
+* JWT Bearer Authentication (`Microsoft.AspNetCore.Authentication.JwtBearer`)
+* `PasswordHasher<T>` (`Microsoft.AspNetCore.Identity`, PBKDF2)
+* Swagger / OpenAPI (Swashbuckle) com suporte a Bearer token
 * xUnit
-* FluentAssertions
+* Docker Compose (PostgreSQL local)
 
 ---
 
 # 🏛 Arquitetura
 
-O projeto foi desenvolvido utilizando um **Monólito Modular** inspirado em **Clean Architecture** e **DDD**.
+O projeto é um **monólito modular** (um único processo/deploy, conforme exigido para o MVP), com 4 módulos de negócio isolados entre si e um `Host` como raiz de composição:
 
 ```
-src
+FGames.sln
 │
-├── FCG.Api
+├── src/
+│   ├── BuildingBlocks/
+│   │   ├── FGames.SharedKernel               (Entity, AggregateRoot, ValueObject, Result<T>, Error)
+│   │   └── FGames.SharedKernel.Infrastructure
+│   │
+│   ├── Modules/
+│   │   ├── Users/        (Domain, Application, Infrastructure, Api)
+│   │   ├── Games/        (Domain, Application, Infrastructure, Api)
+│   │   ├── Promotions/   (Domain, Application, Infrastructure, Api)
+│   │   └── Library/      (Domain, Application, Infrastructure, Api)
+│   │
+│   └── Host/
+│       └── FGames.Api     (Program.cs — único processo executável, compõe todos os módulos)
 │
-├── FCG.Application
-│
-├── FCG.Domain
-│
-├── FCG.Infrastructure
-│
-└── FCG.Tests
+└── tests/
+    ├── FGames.Modules.Users.Tests
+    ├── FGames.Modules.Games.Tests
+    ├── FGames.Modules.Promotions.Tests
+    └── FGames.Modules.Library.Tests
 ```
 
-### Camadas
+Cada módulo segue Clean Architecture internamente:
 
-### API
+* **Domain**: entidades ricas com invariantes (private setters, factory methods retornando `Result<T>`), value objects (`Email`, `Password`), enums e interfaces de repositório. Não depende de nada além do `SharedKernel`.
+* **Application**: Commands/Queries/Handlers via MediatR, validators FluentValidation, DTOs.
+* **Infrastructure**: EF Core (`DbContext` próprio por módulo, todos apontando para o mesmo banco PostgreSQL), repositórios, JWT/hash de senha (módulo Users).
+* **Api**: Controllers, regras de autorização (`[Authorize(Roles=...)]`).
 
-Responsável por:
+**Regra de isolamento entre módulos**: nenhum módulo referencia o projeto de outro módulo diretamente. Leituras entre módulos (ex.: Library precisa saber o preço de um jogo publicado em Games, ou se há promoção ativa) são feitas por interfaces definidas pelo próprio módulo consumidor (`IGameLookupService`, `IActivePromotionLookupService`) e implementadas como adapters em `Host/Adapters`, que despacham a chamada via `IMediator` para o módulo produtor — chamada in-process, sem HTTP, sem acoplamento de projeto.
 
-* Controllers
-* Autenticação
-* Middlewares
-* Configurações
-* Swagger
-
-### Application
-
-Contém:
-
-* Casos de uso
-* Serviços
-* DTOs
-* Validators
-
-### Domain
-
-Contém:
-
-* Entidades
-* Regras de negócio
-* Interfaces
-* Enums
-
-### Infrastructure
-
-Responsável por:
-
-* Entity Framework Core
-* Repositórios
-* Persistência
-* Configurações do banco
-
-### Tests
-
-Projeto contendo testes unitários das principais regras de negócio.
+Cada módulo tem seu próprio `DbContext` (`UsersDbContext`, `GamesDbContext`, `PromotionsDbContext`, `LibraryDbContext`), cada um com seu próprio schema e histórico de migrations, todos compartilhando a mesma instância física do PostgreSQL — mantendo o isolamento de módulo mesmo com banco único.
 
 ---
 
 # ✅ Funcionalidades
 
-## Usuários
+## Cadastro de usuários
+* Nome, e-mail e senha (mín. 8 caracteres, com letra, número e caractere especial)
+* Perfis fixos: `User` (acesso à plataforma e biblioteca) e `Administrator` (cadastra jogos, administra usuários, cria promoções)
 
-* Cadastro
-* Login
-* Atualização
-* Exclusão *(Administrador)*
-
-### Validações
-
-* Nome obrigatório
-* E-mail válido
-* Senha segura
-
-A senha deve conter:
-
-* mínimo de 8 caracteres
-* letra maiúscula
-* letra minúscula
-* número
-* caractere especial
-
----
-
-## Autenticação
-
-Autenticação realizada utilizando **JWT (JSON Web Token)**.
-
-Após o login, um token é gerado permitindo acesso aos endpoints protegidos.
-
----
-
-## Perfis
-
-### Usuário
-
-Pode:
-
-* acessar a plataforma
-* visualizar jogos
-* comprar jogos
-* visualizar sua biblioteca
-
-### Administrador
-
-Pode:
-
-* cadastrar jogos
-* editar jogos
-* excluir jogos
-* administrar usuários
-
----
+## Autenticação e Autorização
+* Login retorna um JWT com claims de `sub`, `email` e `role`
+* Endpoints protegidos por `[Authorize(Roles = "Administrator")]` ou `[Authorize(Roles = "User")]`
 
 ## Jogos
+* Catálogo de jogos publicados é público (não exige autenticação)
+* Administrator cria, edita e publica jogos
+* Listagem de jogos já retorna o preço promocional vigente (`finalPrice`), quando o jogo estiver vinculado a uma promoção ativa
 
-O administrador pode:
-
-* criar jogos
-* editar jogos
-* remover jogos
-* listar jogos
-
----
+## Promoções
+* Administrator cria promoções (período + percentual de desconto) e vincula a jogos publicados
 
 ## Biblioteca
-
-Cada usuário possui sua biblioteca particular.
-
-É possível:
-
-* comprar jogo
-* listar jogos adquiridos
-
----
-
-# 📂 Estrutura do Projeto
-
-```
-src/
-
-FCG.Api/
-
-Controllers
-
-Middlewares
-
-Configurations
-
-Extensions
-
-Program.cs
-
-FCG.Application/
-
-Users
-
-Games
-
-Library
-
-Auth
-
-DTOs
-
-Validators
-
-Interfaces
-
-FCG.Domain/
-
-Entities
-
-Enums
-
-Repositories
-
-Shared
-
-FCG.Infrastructure/
-
-Persistence
-
-Repositories
-
-Identity
-
-Configurations
-
-tests/
-
-FCG.Tests/
-```
+* `User` compra um jogo publicado (preço já aplica desconto de promoção ativa, se houver)
+* Compra duplicada do mesmo jogo é bloqueada
+* `User` lista sua própria biblioteca
 
 ---
 
 # ⚙️ Requisitos
 
 * .NET SDK 8
-* SQL Server *(ou PostgreSQL)*
-* Visual Studio 2022 ou superior
+* Docker (para subir o PostgreSQL local via `docker-compose`)
 
 ---
 
 # ▶️ Como Executar
 
-## Clonar o projeto
+## 1. Subir o banco de dados (PostgreSQL via Docker)
 
 ```bash
-git clone https://github.com/seu-usuario/fcg.git
+docker-compose up -d
 ```
 
----
+Isso sobe um PostgreSQL em `localhost:5432` (usuário/senha/banco de desenvolvimento já configurados em `docker-compose.yml` e `appsettings.Development.json`).
 
-## Restaurar pacotes
+## 2. Rodar a API
 
 ```bash
-dotnet restore
+dotnet run --project src/Host/FGames.Api
 ```
 
----
-
-## Aplicar migrations
-
-```bash
-dotnet ef database update
-```
-
----
-
-## Executar
-
-```bash
-dotnet run
-```
-
----
+As migrations de cada módulo são aplicadas automaticamente no startup (`Database.Migrate()`).
 
 A API estará disponível em:
 
 ```
-https://localhost:5001
+http://localhost:5263
+https://localhost:7291
 ```
 
 Swagger:
 
 ```
-https://localhost:5001/swagger
+http://localhost:5263/swagger
 ```
 
----
+## 3. Rodar os testes
 
-# 🗄 Banco de Dados
-
-Persistência realizada utilizando **Entity Framework Core**.
-
-Principais entidades:
-
-* Users
-* Games
-* UserGames
-
-Relacionamentos:
-
-```
-User
-
-1 ---- N
-
-UserGames
-
-N ---- 1
-
-Game
+```bash
+dotnet test
 ```
 
 ---
 
 # 🔐 Autenticação
 
-Após realizar o login, será retornado um JWT.
+1. `POST /api/users/register` — cadastro público.
+2. `POST /api/users/login` — retorna `{ accessToken, expiresAtUtc, user }`.
+3. No Swagger, clique em **Authorize** e informe apenas o token (sem o prefixo `Bearer`).
 
-Exemplo:
-
-```json
-{
-  "token": "eyJhbGciOi..."
-}
-```
-
-No Swagger, utilize:
-
-```
-Bearer {token}
-```
+Para testar rotas de Administrator, crie o primeiro administrador diretamente no banco (ajustando a coluna `Role` do primeiro usuário registrado) ou promova via `PATCH /api/users/{id}/status` após já existir um Administrator.
 
 ---
 
 # 📡 Endpoints
 
-## Auth
+## Users — `api/users`
 
-| Método | Endpoint           |
-| ------ | ------------------ |
-| POST   | /api/auth/register |
-| POST   | /api/auth/login    |
+| Método | Endpoint              | Acesso                  |
+| ------ | --------------------- | ------------------------ |
+| POST   | `/register`            | Anônimo                  |
+| POST   | `/login`                | Anônimo                  |
+| GET    | `/me`                   | Autenticado               |
+| GET    | `/`                     | Administrator             |
+| GET    | `/{id}`                 | Administrator             |
+| POST   | `/`                     | Administrator (cria usuário/admin) |
+| PATCH  | `/{id}/status`          | Administrator             |
+
+## Games — `api/games`
+
+| Método | Endpoint            | Acesso        |
+| ------ | -------------------- | -------------- |
+| GET    | `/`                   | Anônimo (só publicados) |
+| GET    | `/{id}`                | Anônimo        |
+| POST   | `/`                    | Administrator  |
+| PUT    | `/{id}`                | Administrator  |
+| POST   | `/{id}/publish`        | Administrator  |
+
+> `GET /` (listagem) retorna, para cada jogo, `price` (preço base), `finalPrice` (preço já com desconto da promoção ativa, se houver) e `discountPercentage` (`null` quando não há promoção ativa).
+
+## Promotions — `api/promotions`
+
+| Método | Endpoint                          | Acesso        |
+| ------ | ---------------------------------- | -------------- |
+| GET    | `/`                                  | Anônimo (só ativas) |
+| POST   | `/`                                  | Administrator  |
+| POST   | `/{promotionId}/games/{gameId}`      | Administrator  |
+
+## Library — `api/library`
+
+| Método | Endpoint    | Acesso |
+| ------ | ------------ | ------ |
+| POST   | `/purchase`   | User   |
+| GET    | `/mine`       | User   |
 
 ---
 
-## Usuários
+# 🧪 Testes (TDD)
 
-| Método | Endpoint        |
-| ------ | --------------- |
-| GET    | /api/users      |
-| GET    | /api/users/{id} |
-| PUT    | /api/users/{id} |
-| DELETE | /api/users/{id} |
+O módulo **Users** foi desenvolvido com **TDD**: os testes de `Email`, `Password` e `User` (`tests/FGames.Modules.Users.Tests/Domain`) foram escritos antes da implementação das respectivas classes de domínio.
 
----
+Os demais módulos têm cobertura de unidade nas principais regras de negócio:
 
-## Jogos
-
-| Método | Endpoint        |
-| ------ | --------------- |
-| GET    | /api/games      |
-| GET    | /api/games/{id} |
-| POST   | /api/games      |
-| PUT    | /api/games/{id} |
-| DELETE | /api/games/{id} |
-
----
-
-## Biblioteca
-
-| Método | Endpoint             |
-| ------ | -------------------- |
-| POST   | /api/library/buy     |
-| GET    | /api/library/mygames |
-
----
-
-# 🧪 Testes
-
-Os testes unitários foram desenvolvidos utilizando:
-
-* xUnit
-* FluentAssertions
-
-Principais cenários testados:
-
-* Cadastro de usuário válido
-* Validação de e-mail
-* Validação de senha
-* Compra de jogo
-* Impedir compra duplicada
-* Regras de autorização
-
-Para executar:
+* `Games`: transições de status (`Draft` → `Published`), invariantes de criação
+* `Promotions`: período válido (`EndDate > StartDate`), desconto entre 0 e 100, impedir vincular o mesmo jogo duas vezes à mesma promoção
+* `Library`: impedir compra duplicada, cálculo de preço com/sem promoção ativa, preço não pode ser negativo
 
 ```bash
 dotnet test
@@ -428,53 +231,30 @@ dotnet test
 
 # 🧩 Domain-Driven Design (DDD)
 
-O domínio foi modelado utilizando os conceitos apresentados durante a disciplina.
-
-Fluxos modelados:
-
-* Cadastro de Usuários
-* Cadastro de Jogos
-* Compra de Jogos
-
-Também foram definidos:
-
-* Entidades
-* Agregados
-* Casos de Uso
-* Regras de Negócio
-
-A documentação completa encontra-se disponível no Miro.
+* Entidades ricas com invariantes protegidas (construtores privados + factory methods retornando `Result<T>`, nunca setters públicos)
+* Value Objects: `Email`, `Password` (módulo Users)
+* Agregados: `User`, `Game`, `Promotion` (com `GamePromotion` como entidade filha), `UserGame`
+* Repositórios definidos no Domain, implementados na Infrastructure
+* Event Storming dos fluxos de criação de usuários e criação de jogos: ver documentação separada (Miro).
 
 ---
 
-# 📈 Melhorias Futuras
+# 📈 Melhorias Futuras (próximas fases)
 
-Próximas fases do projeto poderão incluir:
-
-* Matchmaking
-* Carrinho de compras
-* Promoções
-* Pagamentos
-* Servidores dedicados
-* Sistema de amigos
-* Ranking
-* Histórico de partidas
-* GraphQL
-* Cache com Redis
-* Mensageria
-* Microsserviços
+* Matchmaking e gerenciamento de servidores
+* MongoDB / Dapper para consultas de alta performance
+* GraphQL para filtragem avançada do catálogo
+* BDD com Gherkin em módulos adicionais
 
 ---
 
 # 👥 Equipe
 
-**Grupo:** *(Preencher)*
+**Grupo:** *(preencher)*
 
 Integrantes:
 
-* Nome 1
-* Nome 2
-* Nome 3
+* *(preencher)*
 
 ---
 
