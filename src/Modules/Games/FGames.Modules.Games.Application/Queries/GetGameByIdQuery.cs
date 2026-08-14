@@ -4,4 +4,4 @@ using MediatR;
 
 namespace FGames.Modules.Games.Application.Queries;
 
-public sealed record GetGameByIdQuery(Guid Id) : IRequest<Result<GameDto>>;
+public sealed record GetGameByIdQuery(Guid Id, bool IncludeUnpublished = false) : IRequest<Result<GameDto>>;

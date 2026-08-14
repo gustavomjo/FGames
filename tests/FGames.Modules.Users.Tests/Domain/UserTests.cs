@@ -57,6 +57,21 @@ public class UserTests
     }
 
     [Fact]
+    public void RegisterByAdmin_WithUndefinedRole_ReturnsFailure()
+    {
+        var result = User.RegisterByAdmin(
+            "Invalid User",
+            ValidEmail,
+            ValidPasswordHash,
+            birthDate: null,
+            createdByUserId: Guid.NewGuid(),
+            role: (Role)999);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("User.InvalidRole", result.FirstError.Code);
+    }
+
+    [Fact]
     public void Block_SetsStatusToBlocked()
     {
         var user = User.Register("Jane Doe", ValidEmail, ValidPasswordHash, birthDate: null, creationIp: "127.0.0.1").Value;

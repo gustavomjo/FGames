@@ -24,6 +24,13 @@ public sealed class CreateGameCommandHandler : IRequestHandler<CreateGameCommand
         if (gameResult.IsFailure)
             return Result.Failure<GameDto>(gameResult.Errors);
 
+        if (await _gameRepository.ExistsByNameAsync(gameResult.Value.Name, cancellationToken: cancellationToken))
+        {
+            return Result.Failure<GameDto>(new Error(
+                "Game.NameAlreadyExists",
+                "Já existe um jogo cadastrado com este nome."));
+        }
+
         _gameRepository.Add(gameResult.Value);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 

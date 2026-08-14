@@ -26,11 +26,13 @@ public static class ResultExtensions
     {
         var code = result.FirstError.Code;
 
-        var statusCode = code.EndsWith("NotFound", StringComparison.Ordinal)
-            ? StatusCodes.Status404NotFound
-            : code is "User.InvalidCredentials" or "User.NotActive"
-                ? StatusCodes.Status401Unauthorized
-                : StatusCodes.Status400BadRequest;
+        var statusCode = code switch
+        {
+            "User.EmailAlreadyRegistered" => StatusCodes.Status409Conflict,
+            "User.InvalidCredentials" or "User.NotActive" => StatusCodes.Status401Unauthorized,
+            _ when code.EndsWith("NotFound", StringComparison.Ordinal) => StatusCodes.Status404NotFound,
+            _ => StatusCodes.Status400BadRequest
+        };
 
         return new ObjectResult(new { errors = result.Errors })
         {

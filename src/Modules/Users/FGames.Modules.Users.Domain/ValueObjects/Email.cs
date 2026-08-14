@@ -17,10 +17,12 @@ public sealed partial class Email : ValueObject
         if (string.IsNullOrWhiteSpace(value))
             return Result.Failure<Email>(new Error("Email.Empty", "O e-mail não pode ser vazio."));
 
-        if (!EmailRegex().IsMatch(value))
+        var normalizedValue = value.Trim().ToLowerInvariant();
+
+        if (!EmailRegex().IsMatch(normalizedValue))
             return Result.Failure<Email>(new Error("Email.InvalidFormat", "O e-mail informado não é válido."));
 
-        return Result.Success(new Email(value));
+        return Result.Success(new Email(normalizedValue));
     }
 
     protected override IEnumerable<object?> GetEqualityComponents()

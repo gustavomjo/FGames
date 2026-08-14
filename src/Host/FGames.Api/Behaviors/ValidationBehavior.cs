@@ -1,7 +1,7 @@
 using FluentValidation;
 using MediatR;
 
-namespace FGames.Modules.Library.Application.Common;
+namespace FGames.Api.Behaviors;
 
 public sealed class ValidationBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : notnull, IRequest<TResponse>
@@ -18,13 +18,15 @@ public sealed class ValidationBehavior<TRequest, TResponse> : IPipelineBehavior<
         RequestHandlerDelegate<TResponse> next,
         CancellationToken cancellationToken)
     {
-        if (!_validators.Any())
+        var validators = _validators.ToArray();
+        if (validators.Length == 0)
             return await next();
 
         var context = new ValidationContext<TRequest>(request);
+        var results = await Task.WhenAll(
+            validators.Select(validator => validator.ValidateAsync(context, cancellationToken)));
 
-        var failures = _validators
-            .Select(validator => validator.Validate(context))
+        var failures = results
             .SelectMany(result => result.Errors)
             .Where(failure => failure is not null)
             .ToList();

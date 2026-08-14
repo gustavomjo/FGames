@@ -1,5 +1,4 @@
 using FGames.Modules.Promotions.Application.DTOs;
-using FGames.Modules.Promotions.Application;
 using FGames.Modules.Promotions.Application.Interfaces;
 using FGames.Modules.Promotions.Domain.Interfaces;
 using FGames.SharedKernel;
@@ -23,7 +22,9 @@ public sealed class AttachGamePromotionCommandHandler : IRequestHandler<AttachGa
         _unitOfWork = unitOfWork;
     }
 
-    public async Task<Result<PromotionDto>> Handle(AttachGamePromotionCommand request, CancellationToken cancellationToken)
+    public async Task<Result<PromotionDto>> Handle(
+        AttachGamePromotionCommand request,
+        CancellationToken cancellationToken)
     {
         var promotion = await _promotionRepository.GetByIdAsync(request.PromotionId, cancellationToken);
         if (promotion is null)
@@ -33,12 +34,33 @@ public sealed class AttachGamePromotionCommandHandler : IRequestHandler<AttachGa
         if (game is null)
             return Result.Failure<PromotionDto>(new Error("Promotion.GameNotFound", "Jogo não encontrado ou não publicado."));
 
-        var attachResult = promotion.AttachToGame(request.GameId, request.CreatedByUserId);
-        if (attachResult.IsFailure)
-            return Result.Failure<PromotionDto>(attachResult.Errors);
+        return await _unitOfWork.ExecuteInTransactionAsync(async transactionCancellationToken =>
+        {
+            await _promotionRepository.AcquireGamePromotionLockAsync(
+                request.GameId,
+                transactionCancellationToken);
 
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+            var hasOverlap = await _promotionRepository.HasOverlappingActivePromotionAsync(
+                request.GameId,
+                promotion.StartDate,
+                promotion.EndDate,
+                promotion.Id,
+                transactionCancellationToken);
 
-        return Result.Success(PromotionDto.FromEntity(promotion));
+            if (hasOverlap)
+            {
+                return Result.Failure<PromotionDto>(new Error(
+                    "Promotion.OverlappingGamePromotion",
+                    "O jogo já possui outra promoção ativa neste período."));
+            }
+
+            var attachResult = promotion.AttachToGame(request.GameId, request.CreatedByUserId);
+            if (attachResult.IsFailure)
+                return Result.Failure<PromotionDto>(attachResult.Errors);
+
+            await _unitOfWork.SaveChangesAsync(transactionCancellationToken);
+
+            return Result.Success(PromotionDto.FromEntity(promotion));
+        }, cancellationToken);
     }
 }
