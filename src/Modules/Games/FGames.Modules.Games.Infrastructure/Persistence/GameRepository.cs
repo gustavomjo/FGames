@@ -20,5 +20,8 @@ public sealed class GameRepository : IGameRepository
     public async Task<IReadOnlyList<Game>> ListPublishedAsync(CancellationToken cancellationToken = default) =>
         await _dbContext.Games.Where(g => g.Status == GameStatus.Published).ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<Game>> ListDraftAsync(CancellationToken cancellationToken = default) =>
+       await _dbContext.Games.Where(g => g.Status == GameStatus.Draft).ToListAsync(cancellationToken);
+
     public void Add(Game game) => _dbContext.Games.Add(game);
 }

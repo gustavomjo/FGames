@@ -26,6 +26,14 @@ public sealed class GamesController : ControllerBase
         return result.ToActionResult();
     }
 
+    [HttpGet("draft")]
+    [Authorize(Roles = "Administrator")]
+    public async Task<IActionResult> ListDraft(CancellationToken cancellationToken)
+    {
+        var result = await _sender.Send(new ListDraftGamesQuery(), cancellationToken);
+        return result.ToActionResult();
+    }
+
     [HttpGet("{id:guid}")]
     [AllowAnonymous]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)

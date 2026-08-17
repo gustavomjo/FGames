@@ -6,5 +6,6 @@ public interface IGameRepository
 {
     Task<Game?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Game>> ListPublishedAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<Game>> ListDraftAsync(CancellationToken cancellationToken = default);
     void Add(Game game);
 }
