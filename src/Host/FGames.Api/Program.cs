@@ -1,5 +1,6 @@
 using System.Text;
 using FGames.Api.Adapters;
+using FGames.Api.Logging;
 using FGames.Api.Middleware;
 using FGames.Modules.Games.Infrastructure;
 using FGames.Modules.Games.Infrastructure.Persistence;
@@ -18,11 +19,26 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Serilog;
+
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console()
+    .CreateBootstrapLogger();
+
+try
+{
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Host.UseSerilog((context, services, configuration) => configuration
+    .ReadFrom.Configuration(context.Configuration)
+    .ReadFrom.Services(services));
+
 var connectionString = builder.Configuration.GetConnectionString("Default")
     ?? throw new InvalidOperationException("Connection string 'Default' não configurada.");
+
+builder.Services.Configure<RequestResponseLoggingOptions>(
+    builder.Configuration.GetSection(RequestResponseLoggingOptions.SectionName));
 
 // Módulos: Application (MediatR + FluentValidation) e Infrastructure (EF Core, Auth)
 builder.Services.AddMediatR(cfg =>
@@ -115,6 +131,23 @@ using (var scope = app.Services.CreateScope())
     scope.ServiceProvider.GetRequiredService<LibraryDbContext>().Database.Migrate();
 }
 
+app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseSerilogRequestLogging(options =>
+{
+    options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+    {
+        if (httpContext.Items.TryGetValue(RequestResponseLoggingMiddleware.RequestBodyItemKey, out var requestBody))
+        {
+            diagnosticContext.Set(RequestResponseLoggingMiddleware.RequestBodyItemKey, requestBody);
+        }
+
+        if (httpContext.Items.TryGetValue(RequestResponseLoggingMiddleware.ResponseBodyItemKey, out var responseBody))
+        {
+            diagnosticContext.Set(RequestResponseLoggingMiddleware.ResponseBodyItemKey, responseBody);
+        }
+    };
+});
+app.UseMiddleware<RequestResponseLoggingMiddleware>();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 if (app.Environment.IsDevelopment())
@@ -131,3 +164,13 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "Host encerrado inesperadamente");
+}
+finally
+{
+    Log.CloseAndFlush();
+}
