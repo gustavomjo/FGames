@@ -1,9 +1,10 @@
-using System.Security.Claims;
 using FGames.Modules.Users.Application.Commands;
 using FGames.Modules.Users.Application.Queries;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Security.Claims;
 
 namespace FGames.Modules.Users.Api.Controllers;
 
@@ -20,6 +21,7 @@ public sealed class UsersController : ControllerBase
 
     [HttpPost("register")]
     [AllowAnonymous]
+    [EnableRateLimiting("auth")]
     public async Task<IActionResult> Register(RegisterUserRequest request, CancellationToken cancellationToken)
     {
         var command = new RegisterUserCommand(request.Name, request.Email, request.Password, request.BirthDate, HttpContext.Connection.RemoteIpAddress?.ToString());
@@ -29,6 +31,7 @@ public sealed class UsersController : ControllerBase
 
     [HttpPost("login")]
     [AllowAnonymous]
+    [EnableRateLimiting("auth")]
     public async Task<IActionResult> Login(LoginRequest request, CancellationToken cancellationToken)
     {
         var result = await _sender.Send(new LoginCommand(request.Email, request.Password), cancellationToken);

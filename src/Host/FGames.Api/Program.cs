@@ -1,25 +1,24 @@
-using System.Text;
 using FGames.Api.Adapters;
 using FGames.Api.Logging;
 using FGames.Api.Middleware;
+using FGames.Api.RateLimiting;
 using FGames.Modules.Games.Infrastructure;
 using FGames.Modules.Games.Infrastructure.Persistence;
-using FGames.Modules.Library.Application.Interfaces;
 using FGames.Modules.Library.Infrastructure;
 using FGames.Modules.Library.Infrastructure.Persistence;
-using FGames.Modules.Promotions.Application.Interfaces;
 using FGames.Modules.Promotions.Infrastructure;
 using FGames.Modules.Promotions.Infrastructure.Persistence;
 using FGames.Modules.Users.Infrastructure;
 using FGames.Modules.Users.Infrastructure.Auth;
 using FGames.Modules.Users.Infrastructure.Persistence;
 using FluentValidation;
-using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Serilog;
+using System.Text;
+using System.Threading.RateLimiting;
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
@@ -39,6 +38,61 @@ var connectionString = builder.Configuration.GetConnectionString("Default")
 
 builder.Services.Configure<RequestResponseLoggingOptions>(
     builder.Configuration.GetSection(RequestResponseLoggingOptions.SectionName));
+
+// Rate Limiting: policy "auth" mais restritiva para login/registro (alvo de brute-force / criação em massa
+// de contas) e um limiter global mais permissivo para os demais endpoints. Particionado por IP, em memória
+// (sem Redis) — adequado para instância única; para múltiplas instâncias, precisaria de um store distribuído.
+var rateLimitingOptions = builder.Configuration.GetSection(RateLimitingOptions.SectionName).Get<RateLimitingOptions>()
+    ?? new RateLimitingOptions();
+
+builder.Services.AddRateLimiter(limiterOptions =>
+{
+    limiterOptions.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+    {
+        var partitionKey = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = rateLimitingOptions.Global.PermitLimit,
+            Window = TimeSpan.FromSeconds(rateLimitingOptions.Global.WindowSeconds),
+            QueueLimit = 0,
+            QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+        });
+    });
+
+    limiterOptions.AddPolicy("auth", httpContext =>
+    {
+        var partitionKey = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = rateLimitingOptions.Auth.PermitLimit,
+            Window = TimeSpan.FromSeconds(rateLimitingOptions.Auth.WindowSeconds),
+            QueueLimit = 0,
+            QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+        });
+    });
+
+    limiterOptions.OnRejected = async (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        context.HttpContext.Response.ContentType = "application/problem+json";
+
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+        {
+            context.HttpContext.Response.Headers.RetryAfter = ((int)retryAfter.TotalSeconds).ToString();
+        }
+
+        await context.HttpContext.Response.WriteAsJsonAsync(
+            new
+            {
+                title = "Muitas requisições. Tente novamente mais tarde.",
+                status = StatusCodes.Status429TooManyRequests,
+                errors = (object?)null
+            },
+            options: null,
+            contentType: "application/problem+json",
+            cancellationToken);
+    };
+});
 
 // Módulos: Application (MediatR + FluentValidation) e Infrastructure (EF Core, Auth)
 builder.Services.AddMediatR(cfg =>
@@ -157,6 +211,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();
