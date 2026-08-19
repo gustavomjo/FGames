@@ -13,13 +13,19 @@ public sealed class GamesActivePromotionLookupServiceAdapter : IActivePromotionL
         _sender = sender;
     }
 
-    public async Task<ActivePromotionLookupResult?> GetActivePromotionForGameAsync(Guid gameId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyDictionary<Guid, ActivePromotionLookupResult>> GetActivePromotionsForGamesAsync(
+        IReadOnlyCollection<Guid> gameIds,
+        CancellationToken cancellationToken = default)
     {
-        var result = await _sender.Send(new GetActivePromotionForGameQuery(gameId), cancellationToken);
+        var result = await _sender.Send(new GetActivePromotionsForGamesQuery(gameIds), cancellationToken);
 
-        if (result.IsFailure || result.Value is null)
-            return null;
+        if (result.IsFailure)
+            return new Dictionary<Guid, ActivePromotionLookupResult>();
 
-        return new ActivePromotionLookupResult(result.Value.PromotionId, result.Value.DiscountPercentage);
+        return result.Value.ToDictionary(
+            item => item.Key,
+            item => new ActivePromotionLookupResult(
+                item.Value.PromotionId,
+                item.Value.DiscountPercentage));
     }
 }

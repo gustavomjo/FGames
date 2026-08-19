@@ -14,9 +14,12 @@ public sealed class ListActivePromotionsQueryHandler : IRequestHandler<ListActiv
         _promotionRepository = promotionRepository;
     }
 
-    public async Task<Result<IReadOnlyList<PromotionDto>>> Handle(ListActivePromotionsQuery request, CancellationToken cancellationToken)
+    public async Task<Result<IReadOnlyList<PromotionDto>>> Handle(
+        ListActivePromotionsQuery request,
+        CancellationToken cancellationToken)
     {
-        var promotions = await _promotionRepository.ListActiveAsync(cancellationToken);
-        return Result.Success<IReadOnlyList<PromotionDto>>(promotions.Select(PromotionDto.FromEntity).ToList());
+        var promotions = await _promotionRepository.ListActiveAsync(DateTime.UtcNow, cancellationToken);
+        return Result.Success<IReadOnlyList<PromotionDto>>(
+            promotions.Select(PromotionDto.FromEntity).ToList());
     }
 }

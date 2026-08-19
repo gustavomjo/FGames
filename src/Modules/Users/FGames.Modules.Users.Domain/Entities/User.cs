@@ -58,6 +58,9 @@ public sealed class User : AggregateRoot<Guid>
         if (string.IsNullOrWhiteSpace(name))
             return Result.Failure<User>(new Error("User.NameRequired", "O nome do usuário é obrigatório."));
 
+        if (!Enum.IsDefined(typeof(Role), role))
+            return Result.Failure<User>(new Error("User.InvalidRole", "O perfil informado para o usuário é inválido."));
+
         var user = new User(Guid.NewGuid())
         {
             Name = name,

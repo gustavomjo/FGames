@@ -40,10 +40,19 @@ public class EmailTests
     }
 
     [Fact]
-    public void TwoEmails_WithSameValue_AreEqual()
+    public void Create_NormalizesWhitespaceAndCasing()
+    {
+        var result = Email.Create("  User.Name@Example.COM  ");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("user.name@example.com", result.Value.Value);
+    }
+
+    [Fact]
+    public void Emails_DifferingOnlyByCasing_AreEqual()
     {
         var first = Email.Create("user@example.com").Value;
-        var second = Email.Create("user@example.com").Value;
+        var second = Email.Create("USER@EXAMPLE.COM").Value;
 
         Assert.Equal(first, second);
     }

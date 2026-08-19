@@ -26,9 +26,12 @@ public static class ResultExtensions
     {
         var code = result.FirstError.Code;
 
-        var statusCode = code.EndsWith("NotFound", StringComparison.Ordinal)
-            ? StatusCodes.Status404NotFound
-            : StatusCodes.Status400BadRequest;
+        var statusCode = code switch
+        {
+            "Game.NameAlreadyExists" => StatusCodes.Status409Conflict,
+            _ when code.EndsWith("NotFound", StringComparison.Ordinal) => StatusCodes.Status404NotFound,
+            _ => StatusCodes.Status400BadRequest
+        };
 
         return new ObjectResult(new { errors = result.Errors })
         {

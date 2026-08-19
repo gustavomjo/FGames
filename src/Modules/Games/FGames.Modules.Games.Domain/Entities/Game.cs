@@ -35,7 +35,7 @@ public sealed class Game : AggregateRoot<Guid>
 
         var game = new Game(Guid.NewGuid())
         {
-            Name = name,
+            Name = name.Trim(),
             Description = description,
             Category = category,
             Rating = rating,
@@ -56,7 +56,7 @@ public sealed class Game : AggregateRoot<Guid>
         if (price < 0)
             return Result.Failure(new Error("Game.InvalidPrice", "O preço do jogo não pode ser negativo."));
 
-        Name = name;
+        Name = name.Trim();
         Description = description;
         Category = category;
         Rating = rating;

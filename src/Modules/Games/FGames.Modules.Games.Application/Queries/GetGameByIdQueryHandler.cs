@@ -1,4 +1,5 @@
 using FGames.Modules.Games.Application.DTOs;
+using FGames.Modules.Games.Domain.Enums;
 using FGames.Modules.Games.Domain.Interfaces;
 using FGames.SharedKernel;
 using MediatR;
@@ -18,7 +19,7 @@ public sealed class GetGameByIdQueryHandler : IRequestHandler<GetGameByIdQuery, 
     {
         var game = await _gameRepository.GetByIdAsync(request.Id, cancellationToken);
 
-        return game is null
+        return game is null || (!request.IncludeUnpublished && game.Status != GameStatus.Published)
             ? Result.Failure<GameDto>(new Error("Game.NotFound", "Jogo não encontrado."))
             : Result.Success(GameDto.FromEntity(game));
     }

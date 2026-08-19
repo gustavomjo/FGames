@@ -1,6 +1,5 @@
 using FGames.Modules.Users.Application.DTOs;
 using FGames.Modules.Users.Domain.Enums;
-using FGames.Modules.Users.Application;
 using FGames.Modules.Users.Domain.Interfaces;
 using FGames.SharedKernel;
 using MediatR;
@@ -18,7 +17,9 @@ public sealed class SetUserStatusCommandHandler : IRequestHandler<SetUserStatusC
         _unitOfWork = unitOfWork;
     }
 
-    public async Task<Result<UserDto>> Handle(SetUserStatusCommand request, CancellationToken cancellationToken)
+    public async Task<Result<UserDto>> Handle(
+        SetUserStatusCommand request,
+        CancellationToken cancellationToken)
     {
         var user = await _userRepository.GetByIdAsync(request.UserId, cancellationToken);
         if (user is null)
@@ -35,6 +36,10 @@ public sealed class SetUserStatusCommandHandler : IRequestHandler<SetUserStatusC
             case UserStatus.Blocked:
                 user.Block();
                 break;
+            default:
+                return Result.Failure<UserDto>(new Error(
+                    "User.InvalidStatus",
+                    "O status informado para o usuário é inválido."));
         }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);

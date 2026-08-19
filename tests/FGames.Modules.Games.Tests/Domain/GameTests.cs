@@ -16,6 +16,15 @@ public class GameTests
         Assert.Equal(GameStatus.Draft, result.Value.Status);
     }
 
+    [Fact]
+    public void Create_TrimsName()
+    {
+        var result = Game.Create("  Space Quest  ", null, GameCategory.Adventure, AgeRating.Everyone, 49.90m, AdminId);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("Space Quest", result.Value.Name);
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
@@ -32,6 +41,24 @@ public class GameTests
         var result = Game.Create("Space Quest", null, GameCategory.Adventure, AgeRating.Everyone, -1m, AdminId);
 
         Assert.True(result.IsFailure);
+    }
+
+    [Fact]
+    public void Create_WithUndefinedCategory_ReturnsFailure()
+    {
+        var result = Game.Create("Space Quest", null, (GameCategory)999, AgeRating.Everyone, 10m, AdminId);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("Game.InvalidCategory", result.FirstError.Code);
+    }
+
+    [Fact]
+    public void Create_WithUndefinedAgeRating_ReturnsFailure()
+    {
+        var result = Game.Create("Space Quest", null, GameCategory.Action, (AgeRating)999, 10m, AdminId);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("Game.InvalidAgeRating", result.FirstError.Code);
     }
 
     [Fact]

@@ -9,6 +9,8 @@ public sealed class UpdateGameCommandValidator : AbstractValidator<UpdateGameCom
     {
         RuleFor(command => command.GameId).NotEmpty();
         RuleFor(command => command.Name).NotEmpty();
+        RuleFor(command => command.Category).IsInEnum();
+        RuleFor(command => command.Rating).IsInEnum();
         RuleFor(command => command.Price).GreaterThanOrEqualTo(0);
     }
 }

@@ -23,6 +23,13 @@ public sealed class UpdateGameCommandHandler : IRequestHandler<UpdateGameCommand
         if (game is null)
             return Result.Failure<GameDto>(new Error("Game.NotFound", "Jogo não encontrado."));
 
+        if (await _gameRepository.ExistsByNameAsync(request.Name, request.GameId, cancellationToken))
+        {
+            return Result.Failure<GameDto>(new Error(
+                "Game.NameAlreadyExists",
+                "Já existe um jogo cadastrado com este nome."));
+        }
+
         var updateResult = game.Update(request.Name, request.Description, request.Category, request.Rating, request.Price);
         if (updateResult.IsFailure)
             return Result.Failure<GameDto>(updateResult.Errors);

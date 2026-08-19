@@ -11,5 +11,6 @@ public sealed class CreateUserCommandValidator : AbstractValidator<CreateUserCom
         RuleFor(command => command.Email).NotEmpty();
         RuleFor(command => command.Password).NotEmpty();
         RuleFor(command => command.CreatedByUserId).NotEmpty();
+        RuleFor(command => command.Role).IsInEnum();
     }
 }

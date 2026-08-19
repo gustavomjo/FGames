@@ -1,5 +1,7 @@
+using FGames.Api;
 using FGames.Api.Adapters;
 using FGames.Api.Logging;
+using FGames.Api.Behaviors;
 using FGames.Api.Middleware;
 using FGames.Api.RateLimiting;
 using FGames.Modules.Games.Infrastructure;
@@ -102,10 +104,7 @@ builder.Services.AddMediatR(cfg =>
     cfg.RegisterServicesFromAssembly(typeof(FGames.Modules.Promotions.Application.Commands.CreatePromotionCommand).Assembly);
     cfg.RegisterServicesFromAssembly(typeof(FGames.Modules.Library.Application.Commands.PurchaseGameCommand).Assembly);
 
-    cfg.AddOpenBehavior(typeof(FGames.Modules.Users.Application.Common.ValidationBehavior<,>));
-    cfg.AddOpenBehavior(typeof(FGames.Modules.Games.Application.Common.ValidationBehavior<,>));
-    cfg.AddOpenBehavior(typeof(FGames.Modules.Promotions.Application.Common.ValidationBehavior<,>));
-    cfg.AddOpenBehavior(typeof(FGames.Modules.Library.Application.Common.ValidationBehavior<,>));
+    cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
 });
 
 builder.Services.AddValidatorsFromAssembly(typeof(FGames.Modules.Users.Application.Commands.RegisterUserCommand).Assembly);
@@ -147,11 +146,33 @@ builder.Services.AddAuthorization();
 
 // API
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
-    options.SwaggerDoc("v1", new OpenApiInfo { Title = "FIAP Cloud Games API", Version = "v1" });
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "FIAP Cloud Games API",
+        Version = "v1",
+        Description = "API para cadastro de usuários, catálogo de jogos, promoções e biblioteca. " +
+                      "Cada operação informa seu nível de acesso, regras de negócio e respostas possíveis."
+    });
+
+    var apiAssemblies = new[]
+    {
+        typeof(FGames.Modules.Users.Api.Controllers.UsersController).Assembly,
+        typeof(FGames.Modules.Games.Api.Controllers.GamesController).Assembly,
+        typeof(FGames.Modules.Promotions.Api.Controllers.PromotionsController).Assembly,
+        typeof(FGames.Modules.Library.Api.Controllers.LibraryController).Assembly
+    };
+
+    foreach (var assembly in apiAssemblies.Distinct())
+    {
+        var xmlFile = Path.Combine(AppContext.BaseDirectory, $"{assembly.GetName().Name}.xml");
+        if (File.Exists(xmlFile))
+            options.IncludeXmlComments(xmlFile, includeControllerXmlComments: true);
+    }
+
+    options.OperationFilter<SwaggerAuthorizeCheckOperationFilter>();
 
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
@@ -215,6 +236,7 @@ app.UseHttpsRedirection();
 app.UseRateLimiter();
 
 app.UseAuthentication();
+app.UseMiddleware<ActiveUserMiddleware>();
 app.UseAuthorization();
 
 app.MapControllers();
