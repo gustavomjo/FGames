@@ -33,6 +33,12 @@ public sealed class Game : AggregateRoot<Guid>
         if (price < 0)
             return Result.Failure<Game>(new Error("Game.InvalidPrice", "O preço do jogo não pode ser negativo."));
 
+        if (!Enum.IsDefined(typeof(GameCategory), category))
+            return Result.Failure<Game>(new Error("Game.InvalidCategory", "A categoria do jogo é inválida."));
+
+        if (!Enum.IsDefined(typeof(AgeRating), rating))
+            return Result.Failure<Game>(new Error("Game.InvalidAgeRating", "A classificação etária é inválida."));
+
         var game = new Game(Guid.NewGuid())
         {
             Name = name.Trim(),
@@ -55,6 +61,12 @@ public sealed class Game : AggregateRoot<Guid>
 
         if (price < 0)
             return Result.Failure(new Error("Game.InvalidPrice", "O preço do jogo não pode ser negativo."));
+
+        if (!Enum.IsDefined(typeof(GameCategory), category))
+            return Result.Failure(new Error("Game.InvalidCategory", "A categoria do jogo é inválida."));
+
+        if (!Enum.IsDefined(typeof(AgeRating), rating))
+            return Result.Failure(new Error("Game.InvalidAgeRating", "A classificação etária é inválida."));
 
         Name = name.Trim();
         Description = description;
